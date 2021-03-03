@@ -109,7 +109,8 @@ def checkout(parser, options):
     # bam files and sam files are alternative, the same for the case of events_file and coordinate
     # events_file should be provided together with event_type
     if (options.s1 is None and options.b1 is None) or (options.s2 is None and options.b2 is None):
-        parser.error("Not enough arguments! Please provide sam or bam files.")
+        if options.sample_table is None:
+            parser.error("Not enough arguments! Please provide sam or bam files.")
     if (options.events_file is None or options.event_type is None) and options.coordinate is None:
         parser.error("Not enough arguments! Please provide "
                      "1) coordinates with gff3 files. or "
