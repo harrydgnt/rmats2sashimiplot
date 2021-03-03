@@ -163,9 +163,6 @@ def conf_setting_file(options, gene_no_str=None, gene_symbol=None, events_name_l
     setting_file.write("bam_prefix = " + sam_dir + "\n")
     setting_file.write("miso_prefix = " + sam_dir + "\n")
     # setting string for replicates
-    if options.sample_table is not None:
-        # parse sample table
-        options = parse_sample_table(options)
     bam_files_arr1 = []
     bam_files_arr2 = []
     sample_1 = options.b1.split(',')  # sam files has already been converted into bam files and stored in options.b1&b2
@@ -899,6 +896,10 @@ def main():
         os.makedirs(sashimi_path)
     options.out_dir = out_path
     options.sashimi_path = sashimi_path
+
+    if options.sample_table is not None:
+        # parse sample table
+        options = parse_sample_table(options)
 
     convert_sam2bam(options)  # 1.convert sam to bam format
 
