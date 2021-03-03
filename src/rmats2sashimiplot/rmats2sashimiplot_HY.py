@@ -4,6 +4,51 @@ import os
 import sys
 import argparse
 import subprocess
+import pandas as pd
+
+def parse_sample_table(options):
+    sample_table_file = options.sample_table
+    # # local debug
+    # sample_table_file = "/Users/harryyang/test.table.csv"
+    sample_table = pd.read_csv(sample_table_file)
+    sample_table.columns = ['sample', 'group']
+
+    # sort sample table by group
+    sample_table_sorted = sample_table.sort_values(by="group").reset_index(drop=True)
+
+    # generate count data - this information is used for generating grouping file
+    # - this is sorted by index again to make sure that it is not sorted by frequency, which may not be desired by user
+    # - if custom coloring is set
+    group_count = sample_table_sorted.value_counts('group').sort_index()
+
+    # get index for parsing
+    group_list = list(group_count.index)
+
+    # extract samples to conform to the options format
+    """ 
+    adding first group samples to b21 and the rest to b2
+    - this may not work well for groups larger than 2 - TODO - fix 
+    """
+    sample_list_first = sample_table_sorted[sample_table_sorted['group'] == group_list[0]]['sample']
+    sample_list_rest = sample_table_sorted[sample_table_sorted['group'] != group_list[0]]['sample']
+    # add these to options bam for downstream functions
+    options.b1 = ",".join(sample_list_first)
+    options.b2 = ",".join(sample_list_rest)
+
+    # generate grouping file
+    # define output file
+    output_file = "%s/grouping.gf" % options.out_dir
+    with open(output_file, 'w') as output:
+        current_count = 0
+        for current_group, count in group_count.iteritems():
+            # enumerate and write group entry
+            output_group_entry = "%s: %i-%i" % (current_group, current_count + 1, current_count + count)
+            current_count += count  # recalculate cumulative sample count
+            output.write(output_group_entry + '\n')
+    # save grouping file for downstream functions
+    options.group_info = output_file
+
+    return options
 
 
 def convert_sam2bam(options):
@@ -91,9 +136,10 @@ def checkout(parser, options):
         if file_check_error:
             parser.error("Error checking bam files given as --b2: {}".format(
                 file_check_error))
-
+    elif options.sample_table is not None:
+        print("Sample table selected")
     else:
-        parser.error("Need to provide either (--s1 and --s2) or (--b1 and --b2)")
+        parser.error("Need to provide either (--s1 and --s2) or (--b1 and --b2) or sample table")
 
     if options.events_file:
         file_check_error = file_check(options.events_file, ".txt")
@@ -117,6 +163,9 @@ def conf_setting_file(options, gene_no_str=None, gene_symbol=None, events_name_l
     setting_file.write("bam_prefix = " + sam_dir + "\n")
     setting_file.write("miso_prefix = " + sam_dir + "\n")
     # setting string for replicates
+    if options.sample_table is not None:
+        # parse sample table
+        options = parse_sample_table(options)
     bam_files_arr1 = []
     bam_files_arr2 = []
     sample_1 = options.b1.split(',')  # sam files has already been converted into bam files and stored in options.b1&b2
@@ -128,7 +177,6 @@ def conf_setting_file(options, gene_no_str=None, gene_symbol=None, events_name_l
     setting_bam_str = ','.join(bam_files_arr1) + ',' + ','.join(bam_files_arr2)
     len_sample1 = len(sample_1)
     len_sample2 = len(sample_2)
-
     setting_file.write("bam_files = [{0}]\n".format(setting_bam_str))
     setting_file.write("miso_files = [{0}]\n".format(setting_bam_str))
     setting_file.write("[plotting]\n")
@@ -807,7 +855,9 @@ def main():
     group_bam.add_argument(
         "--b2", dest="b2",
         help=sam_bam_sample_arg_desc_template.format(num=2, kind='bam'))
-
+    group_bam.add_argument(
+        "--sample_table", dest="sample_table",
+        help="Custom Sample CSV Table developed by HY - must include group info in second column")
     optional_group = parser.add_argument_group('Optional')
     optional_group.add_argument(
         "--exon_s", dest="exon_s", type=int, default=1,
